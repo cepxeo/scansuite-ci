@@ -19,6 +19,22 @@ docker run --rm -v "$PWD:/src" -w /src \
     appsec4u/scansuite-ci:1 [OPTIONS]
 ```
 
+### Ready-made scripts
+
+If you'd rather call a script than remember flags, this folder ships three:
+
+| Script | What it does |
+|---|---|
+| [`scan.sh`](scan.sh) | General wrapper — set `SCANSUITE_*`, pass any flags, get proper exit-code messages. |
+| [`ai-sast-pr.sh`](ai-sast-pr.sh) | AI SAST on the changed files of a PR, reachable-only gate. |
+| [`ai-deep-nightly.sh`](ai-deep-nightly.sh) | Full AI scan (SAST + dependencies + secrets) with a per-severity budget, for a nightly cron. |
+
+```bash
+export SCANSUITE_URL=https://scansuite.example.com SCANSUITE_TEAM=appsec \
+       SCANSUITE_PRODUCT=my-service SCANSUITE_TOKEN=****
+./examples/scan.sh --changed-only --base origin/main
+```
+
 ---
 
 ### 1. Merge/pull request — fast, only what changed
