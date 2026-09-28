@@ -3,8 +3,11 @@
 # ai-sast-pr.sh — AI static analysis on just the files a pull/merge request changes,
 # blocking only on findings the AI confirms are reachable. Fast enough for every PR.
 #
-#   Required (SCANSUITE_TOKEN must be a masked CI secret):
-#     SCANSUITE_URL, SCANSUITE_TEAM, SCANSUITE_TOKEN, SCANSUITE_PRODUCT
+#   Required: SCANSUITE_URL, SCANSUITE_TEAM, SCANSUITE_TOKEN, SCANSUITE_PRODUCT
+#
+# The token is passed to the container through the environment (not the command line)
+# and is not printed. bash can't hide a value it holds, so store SCANSUITE_TOKEN as
+# your CI platform's masked/secret variable and treat it as a credential locally.
 #
 #   Base branch to diff against (first argument, or $BASE, default origin/main):
 #     ./ai-sast-pr.sh                    # diff against origin/main
@@ -12,6 +15,9 @@
 #
 # Check out full history (git fetch --unshallow / fetch-depth: 0) so the merge base
 # can be found; the client fetches the base branch itself if a shallow clone lacks it.
+#
+# This scans code only, so it uses --fail-on-secrets none and needs just a SAST-scoped
+# token (product.read, scan.execute, scan.read, finding.read) — no credential.read.
 
 set -uo pipefail
 
@@ -20,7 +26,7 @@ BASE="${1:-${BASE:-origin/main}}"
 
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 3; }
 for v in SCANSUITE_URL SCANSUITE_TEAM SCANSUITE_TOKEN SCANSUITE_PRODUCT; do
-  [ -n "${!v:-}" ] || { echo "error: set $v (SCANSUITE_TOKEN must be a masked secret)" >&2; exit 3; }
+  [ -n "${!v:-}" ] || { echo "error: set $v" >&2; exit 3; }
 done
 
 echo "AI SAST on files changed since $BASE ..."
@@ -30,6 +36,7 @@ docker run --rm -v "$PWD:/src" -w /src \
   --scanners mlsast --options mlsast_reachability \
   --changed-only --base "$BASE" \
   --min-confidence reachable --fail-on-severity high \
+  --fail-on-secrets none \
   --sarif scansuite.sarif --junit scansuite-junit.xml
 code=$?
 

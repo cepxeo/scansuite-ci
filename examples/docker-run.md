@@ -1,8 +1,9 @@
 # Running scansuite-ci with `docker run`
 
 Every example uses the published image `appsec4u/scansuite-ci:1`. They assume these
-are exported in the environment (the **token is always a masked secret**, never on
-the command line):
+are exported in the environment — the token is passed **through the environment, not on
+the command line**; in CI, store `SCANSUITE_TOKEN` as your platform's masked secret (a
+shell can't mask it for you):
 
 ```bash
 export SCANSUITE_URL=https://scansuite.example.com

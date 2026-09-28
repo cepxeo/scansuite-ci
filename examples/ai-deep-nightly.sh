@@ -5,8 +5,11 @@
 # hunt), AI dependency checks (reachability) and AI-verified secret scanning, with a
 # per-severity budget, and saves the report. Slower and higher AI cost — not for PRs.
 #
-#   Required (SCANSUITE_TOKEN must be a masked CI secret):
-#     SCANSUITE_URL, SCANSUITE_TEAM, SCANSUITE_TOKEN, SCANSUITE_PRODUCT
+#   Required: SCANSUITE_URL, SCANSUITE_TEAM, SCANSUITE_TOKEN, SCANSUITE_PRODUCT
+#
+# The token is passed through the environment (not the command line) and not printed.
+# bash can't hide a value it holds, so store SCANSUITE_TOKEN as your CI platform's
+# masked/secret variable and treat it as a credential locally.
 #
 #   The secrets gate (--fail-on-secrets all) needs the credential.read permission on
 #   the token. Without it, replace "all" with "none" and drop "secrets" / "secrets_ai".
@@ -20,7 +23,7 @@ IMAGE="${SCANSUITE_IMAGE:-appsec4u/scansuite-ci:1}"
 
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 3; }
 for v in SCANSUITE_URL SCANSUITE_TEAM SCANSUITE_TOKEN SCANSUITE_PRODUCT; do
-  [ -n "${!v:-}" ] || { echo "error: set $v (SCANSUITE_TOKEN must be a masked secret)" >&2; exit 3; }
+  [ -n "${!v:-}" ] || { echo "error: set $v" >&2; exit 3; }
 done
 
 echo "Deep AI scan (SAST + dependencies + secrets) starting ..."

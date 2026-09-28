@@ -5,11 +5,17 @@
 # A reusable wrapper: configure it with environment variables and pass any extra
 # client flags as arguments. Drop it in your repo and call it from any CI system.
 #
-#   Required (SCANSUITE_TOKEN must be a masked CI secret — it is never printed):
+#   Required:
 #     SCANSUITE_URL       e.g. https://scansuite.example.com
 #     SCANSUITE_TEAM      your team slug, e.g. appsec
-#     SCANSUITE_TOKEN     a service-account API token
+#     SCANSUITE_TOKEN     a service-account API token (see "Handling the token" below)
 #     SCANSUITE_PRODUCT   the product name  (or pass --product-id N as an argument)
+#
+# Handling the token: this script passes SCANSUITE_TOKEN to the container through the
+# environment, never on the command line (so it stays out of `ps`), and never prints
+# it. That is all a shell can do — bash cannot "mask" a value it holds. In CI, store
+# the token as your platform's masked/secret variable so it is redacted from job logs;
+# locally, treat it like any credential (don't commit or log it; --token-file also works).
 #
 #   Optional:
 #     SCANSUITE_IMAGE     image to run       (default: appsec4u/scansuite-ci:1)
@@ -39,12 +45,13 @@ for v in SCANSUITE_URL SCANSUITE_TEAM SCANSUITE_TOKEN; do
 done
 if [ -n "$missing" ]; then
   echo "error: set these environment variables first:$missing" >&2
-  echo "       (SCANSUITE_TOKEN must be a masked CI secret)" >&2
+  echo "       (store SCANSUITE_TOKEN as your CI platform's masked secret)" >&2
   exit 3
 fi
 
 # --- run -------------------------------------------------------------------
-# The checkout is mounted at /src; the token is forwarded as an env var only.
+# The checkout is mounted at /src; the token is forwarded through the environment
+# (not on the command line) and is not printed by this script.
 docker run --rm -v "$PWD:/src" -w /src \
   -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
   -e SCANSUITE_PRODUCT -e SCANSUITE_PRODUCT_ID \

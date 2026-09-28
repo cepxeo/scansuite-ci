@@ -27,8 +27,8 @@ That's it. Set the three variables once and every example below just works.
 ## Quick start
 
 The client reads `SCANSUITE_URL`, `SCANSUITE_TEAM`, `SCANSUITE_TOKEN` from the
-environment, so the token stays a masked secret and never appears on the command
-line. Mount your checkout at `/src` and run there:
+environment, so the token isn't written on the command line (where `ps` would expose
+it). Mount your checkout at `/src` and run there:
 
 ```bash
 docker run --rm -v "$PWD:/src" -w /src \
@@ -46,12 +46,30 @@ shape that for pull requests, nightly runs, release gates and single-purpose sca
 > export SCANSUITE_URL=https://scansuite.example.com SCANSUITE_TEAM=appsec SCANSUITE_TOKEN=****
 > ```
 
+### Handling the token
+
+The token is a credential, so treat it like one. The examples and scripts here pass it
+to the container through the `SCANSUITE_TOKEN` **environment variable** — never as a
+command-line argument (which `ps` would expose) — and never echo it. That's the limit of
+what a shell can do: **it can't "mask" or hide a value it holds.** The redaction you see
+in job logs is done by your CI platform when the token is stored as a *masked/secret*
+variable, not by any script. So: **in CI, always store it as the platform's masked
+secret**; running locally, keep it out of your shell history and files (`--token-file`
+reads it from a file instead of the environment).
+
 ---
 
 ## Practical examples
 
 Complete commands, grouped by what you want to scan. Swap `my-service` for your
 product and add report flags (`--junit`, `--sarif`, `--summary-json`) as your CI needs.
+
+> **Note on `credential.read`.** The secrets gate is on by default
+> (`--fail-on-secrets new`) and is checked at startup, so the token needs the
+> `credential.read` permission unless you turn the gate off. A **code-only** scan
+> (SAST-only or dependencies-only) doesn't read secrets — add **`--fail-on-secrets none`**
+> to run it with a minimal token that has no `credential.read` (as
+> [`examples/ai-sast-pr.sh`](examples/ai-sast-pr.sh) does).
 
 ### AI static analysis (SAST)
 
