@@ -157,3 +157,118 @@ pipeline {
   }
 }
 ```
+
+---
+
+## Fine-grained AI scans
+
+`--scanners` / `--options` are CLI-only, so pass them through the step's **`args`**.
+Gate settings have their own step options (`failOnSeverity`, `minConfidence`, `max`);
+combine them freely.
+
+## 7. Full AI SAST — reachability + architecture + git history (default branch)
+
+```groovy
+@Library('scansuite') _
+pipeline {
+  agent any
+  stages {
+    stage('AI SAST') {
+      steps {
+        scansuiteScan(
+          url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
+          credentialsId: 'scansuite-ci-token',
+          failOnSeverity: 'high',
+          args: '--scanners mlsast --options mlsast_reachability,mlsast_security_architecture,mlsast_git_history --sarif scansuite.sarif')
+      }
+    }
+  }
+}
+```
+
+## 8. AI SAST on a change request — changed-only, reachable-only
+
+```groovy
+@Library('scansuite') _
+pipeline {
+  agent any
+  stages {
+    stage('AI SAST (PR)') {
+      when { changeRequest() }
+      steps {
+        scansuiteScan(
+          url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
+          credentialsId: 'scansuite-ci-token',
+          changedOnly: true, minConfidence: 'reachable', failOnSeverity: 'high',
+          args: '--scanners mlsast --options mlsast_reachability')
+      }
+    }
+  }
+}
+```
+
+## 9. AI dependency checks (SCA) — reachable-only
+
+```groovy
+@Library('scansuite') _
+pipeline {
+  agent any
+  stages {
+    stage('AI dependencies') {
+      steps {
+        scansuiteScan(
+          url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
+          credentialsId: 'scansuite-ci-token',
+          minConfidence: 'reachable', failOnSeverity: 'high',
+          args: '--scanners dep_checks --options dep_checks_ai,dep_checks_reachability')
+      }
+    }
+  }
+}
+```
+
+## 10. AI secret scanning — verified, new secrets only
+
+Needs `credential.read` on the token; otherwise add `--fail-on-secrets none` to `args`.
+
+```groovy
+@Library('scansuite') _
+pipeline {
+  agent any
+  stages {
+    stage('AI secrets') {
+      steps {
+        scansuiteScan(
+          url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
+          credentialsId: 'scansuite-ci-token',
+          failOnSeverity: 'none',
+          args: '--scanners secrets --options secrets_ai --fail-on-secrets new')
+      }
+    }
+  }
+}
+```
+
+## 11. Deep nightly — everything AI, plus the cross-file boundary hunt
+
+```groovy
+@Library('scansuite') _
+pipeline {
+  agent any
+  triggers { cron('H 2 * * *') }
+  stages {
+    stage('AI deep') {
+      steps {
+        scansuiteScan(
+          url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
+          credentialsId: 'scansuite-ci-token',
+          max: 'high=0,critical=0,medium=10',
+          args: '''--scanners mlsast,dep_checks,secrets \
+                   --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai \
+                   --fail-on-secrets all --timeout 14400 --report-zip scansuite-report.zip''')
+      }
+    }
+  }
+  post { always { archiveArtifacts allowEmptyArchive: true, artifacts: 'scansuite-report.zip' } }
+}
+```

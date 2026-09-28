@@ -133,3 +133,84 @@ scansuite:
     # or, to refuse any untrusted certificate instead of warning:
     # SCANSUITE_STRICT_TLS: "1"
 ```
+
+---
+
+## Fine-grained AI scans
+
+`--scanners` / `--options` are CLI-only, so pass them through `SCANSUITE_EXTRA_ARGS`
+(the `.scansuite` template appends it to every run). Each job extends `.scansuite`, so
+it already uploads the JUnit/JSON/SARIF artifacts.
+
+## 7. Full AI SAST — reachability + architecture + git history (default branch)
+
+```yaml
+scansuite-ai-sast:
+  extends: .scansuite
+  variables:
+    SCANSUITE_EXTRA_ARGS: >-
+      --scanners mlsast
+      --options mlsast_reachability,mlsast_security_architecture,mlsast_git_history
+      --fail-on-severity high
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+```
+
+## 8. AI SAST on a merge request — changed-only, reachable-only
+
+```yaml
+scansuite-ai-mr:
+  extends: .scansuite
+  variables:
+    SCANSUITE_CHANGED_ONLY: "1"
+    SCANSUITE_MIN_CONFIDENCE: reachable
+    SCANSUITE_EXTRA_ARGS: --scanners mlsast --options mlsast_reachability
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+```
+
+## 9. AI dependency checks (SCA) — reachable-only
+
+The AI enriches CVE findings and traces reachability; unreachable CVEs don't block.
+
+```yaml
+scansuite-ai-deps:
+  extends: .scansuite
+  variables:
+    SCANSUITE_MIN_CONFIDENCE: reachable
+    SCANSUITE_FAIL_ON_SEVERITY: high
+    SCANSUITE_EXTRA_ARGS: --scanners dep_checks --options dep_checks_ai,dep_checks_reachability
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+```
+
+## 10. AI secret scanning — verified, new secrets only
+
+Needs `credential.read` on the token; otherwise set `SCANSUITE_FAIL_ON_SECRETS: none`.
+
+```yaml
+scansuite-ai-secrets:
+  extends: .scansuite
+  variables:
+    SCANSUITE_FAIL_ON_SEVERITY: none
+    SCANSUITE_FAIL_ON_SECRETS: new
+    SCANSUITE_EXTRA_ARGS: --scanners secrets --options secrets_ai
+```
+
+## 11. Deep nightly — everything AI, plus the cross-file boundary hunt
+
+```yaml
+scansuite-ai-deep:
+  extends: .scansuite
+  variables:
+    SCANSUITE_MAX: high=0,critical=0,medium=10
+    SCANSUITE_FAIL_ON_SECRETS: all
+    SCANSUITE_EXTRA_ARGS: >-
+      --scanners mlsast,dep_checks,secrets
+      --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai
+      --timeout 14400 --report-zip scansuite-report.zip
+  artifacts:
+    paths: [scansuite-report.zip, scansuite.json]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+```
