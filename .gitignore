@@ -1,0 +1,7 @@
+# Local scan artifacts produced by the client
+scansuite.json
+scansuite.sarif
+scansuite-junit.xml
+scansuite-report.zip
+*.sarif
+__pycache__/

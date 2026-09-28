@@ -1,0 +1,91 @@
+# ScanSuite for GitHub Actions.
+#
+# Copy this directory into your repository (e.g. .github/actions/scansuite) and use it:
+#
+#   - uses: actions/checkout@v4
+#     with: { fetch-depth: 0 }          # --changed-only needs the history
+#   - uses: ./.github/actions/scansuite
+#     with:
+#       url: https://scansuite.example.com
+#       team: appsec
+#       product: my-service
+#       token: ${{ secrets.SCANSUITE_TOKEN }}
+#       profile: ${{ github.event_name == 'pull_request' && 'quick' || 'standard' }}
+#       changed-only: ${{ github.event_name == 'pull_request' }}
+#   - uses: github/codeql-action/upload-sarif@v3
+#     if: always()
+#     with: { sarif_file: scansuite.sarif }
+name: ScanSuite scan
+description: Run a ScanSuite SAST scan and fail the job when it finds blocking vulnerabilities or secrets.
+inputs:
+  url:
+    description: ScanSuite URL
+    required: true
+  team:
+    description: The team's short name
+    required: true
+  token:
+    description: Service-account API token (pass a secret)
+    required: true
+  product:
+    description: The product's exact name (or use product-id)
+    default: ""
+  product-id:
+    description: The product's ID
+    default: ""
+  profile:
+    description: quick, standard or deep
+    default: standard
+  changed-only:
+    description: "true: scan only the files the pull request changes"
+    default: "false"
+  base:
+    description: Branch or commit changed-only compares with (default the pull request base)
+    default: ""
+  fail-on-severity:
+    description: Lowest blocking severity (critical, high, medium, low, info, none)
+    default: high
+  max:
+    description: Allowed open findings per severity, e.g. high=0,medium=10
+    default: ""
+  block-class:
+    description: Vulnerability classes that block at any severity, e.g. sql_injection,command_injection
+    default: ""
+  min-confidence:
+    description: "any, or reachable: only findings AI confirmed reachable block"
+    default: any
+  strict-tls:
+    description: "true: stop on a self-signed or unknown-CA certificate instead of warning and continuing unverified"
+    default: "false"
+  ca-bundle:
+    description: Path (in the workspace) to the CA certificate of a private CA
+    default: ""
+  sarif:
+    description: SARIF report path, for github/codeql-action/upload-sarif
+    default: scansuite.sarif
+  summary-json:
+    description: JSON summary path
+    default: scansuite.json
+runs:
+  using: docker
+  image: docker://appsec4u/scansuite-ci:1
+  env:
+    SCANSUITE_URL: ${{ inputs.url }}
+    SCANSUITE_TEAM: ${{ inputs.team }}
+    SCANSUITE_TOKEN: ${{ inputs.token }}
+    SCANSUITE_PRODUCT: ${{ inputs.product }}
+    SCANSUITE_PRODUCT_ID: ${{ inputs.product-id }}
+    SCANSUITE_PROFILE: ${{ inputs.profile }}
+    SCANSUITE_CHANGED_ONLY: ${{ inputs.changed-only == 'true' && '1' || '' }}
+    SCANSUITE_BASE: ${{ inputs.base }}
+    SCANSUITE_FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+    SCANSUITE_MAX: ${{ inputs.max }}
+    SCANSUITE_BLOCK_CLASS: ${{ inputs.block-class }}
+    SCANSUITE_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+    SCANSUITE_CA_BUNDLE: ${{ inputs.ca-bundle }}
+    SCANSUITE_STRICT_TLS: ${{ inputs.strict-tls == 'true' && '1' || '' }}
+  args:
+    - --sarif
+    - ${{ inputs.sarif }}
+    - --summary-json
+    - ${{ inputs.summary-json }}

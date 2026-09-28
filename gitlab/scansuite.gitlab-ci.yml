@@ -1,0 +1,57 @@
+# ScanSuite for GitLab CI.
+#
+# Include it from your ScanSuite server (it always matches that server):
+#
+#   include:
+#     - remote: 'https://scansuite.example.com/ci/scansuite.gitlab-ci.yml'
+#
+# and set these CI/CD variables (Settings > CI/CD > Variables):
+#   SCANSUITE_URL         https://scansuite.example.com
+#   SCANSUITE_TEAM        the team's short name, e.g. appsec
+#   SCANSUITE_PRODUCT     the product's exact name (or SCANSUITE_PRODUCT_ID)
+#   SCANSUITE_TOKEN       a service-account API token -- Masked and Protected
+#   SCANSUITE_CA_BUNDLE   optional: path to your CA certificate for a private CA
+#   SCANSUITE_STRICT_TLS  optional: "1" stops on a self-signed/unknown-CA certificate
+#                         (by default the job warns and continues without verification)
+#
+# Two jobs run by default:
+#   scansuite-merge-request   every merge request: the quick profile on the changed files only
+#   scansuite-default-branch  the default branch: the standard profile (AI SAST) on everything
+# Change a job's SCANSUITE_* variables to tune it, or extend .scansuite for your own jobs.
+# Gate options as variables: SCANSUITE_FAIL_ON_SEVERITY (high), SCANSUITE_MAX (e.g. high=0,medium=10),
+# SCANSUITE_BLOCK_CLASS (e.g. sql_injection), SCANSUITE_MIN_CONFIDENCE (any|reachable).
+
+.scansuite:
+  stage: test
+  image:
+    name: appsec4u/scansuite-ci:1
+    entrypoint: [""]
+  variables:
+    # --changed-only fetches the target branch itself when a shallow clone lacks it.
+    GIT_DEPTH: "50"
+    SCANSUITE_EXTRA_ARGS: ""
+  script:
+    - scansuite-ci --junit scansuite-junit.xml --summary-json scansuite.json --sarif scansuite.sarif $SCANSUITE_EXTRA_ARGS
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: scansuite-junit.xml
+    paths:
+      - scansuite.json
+      - scansuite.sarif
+
+scansuite-merge-request:
+  extends: .scansuite
+  variables:
+    SCANSUITE_PROFILE: quick
+    SCANSUITE_CHANGED_ONLY: "1"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+scansuite-default-branch:
+  extends: .scansuite
+  variables:
+    SCANSUITE_PROFILE: standard
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
