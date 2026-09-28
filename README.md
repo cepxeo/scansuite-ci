@@ -1,208 +1,270 @@
 # ScanSuite CI/CD client
 
-Run a ScanSuite SAST scan from a pipeline, follow it to completion, and **fail the
-build when the scan confirms vulnerabilities or secrets**. The client is shipped as
-a container image — `appsec4u/scansuite-ci` — with Python and Git already inside, so
-a job only needs Docker. It authenticates with a team **API token**, never a
-username or password.
+Run a ScanSuite scan from your pipeline, wait for it, and **fail the build when it
+finds real problems** — vulnerabilities, vulnerable dependencies, or leaked secrets.
+Everything ships in one container image, `appsec4u/scansuite-ci`, with Python and Git
+already inside, so a CI job only needs Docker.
 
-This repository holds **how to run it**: ready-made integrations and worked
-examples for GitHub Actions, GitLab CI and Jenkins, plus plain `docker run`
-recipes for any other system.
-
-| Path | What it is |
-|---|---|
-| [`github/action.yml`](github/action.yml) | GitHub Action wrapping the image. |
-| [`github/EXAMPLES.md`](github/EXAMPLES.md) | GitHub workflow examples with different parameters. |
-| [`gitlab/scansuite.gitlab-ci.yml`](gitlab/scansuite.gitlab-ci.yml) | GitLab CI template. |
-| [`gitlab/EXAMPLES.md`](gitlab/EXAMPLES.md) | GitLab job examples with different parameters. |
-| [`jenkins/vars/scansuiteScan.groovy`](jenkins/vars/scansuiteScan.groovy) | Jenkins shared-library step. |
-| [`jenkins/EXAMPLES.md`](jenkins/EXAMPLES.md) | Jenkins pipeline examples with different parameters. |
-| [`examples/docker-run.md`](examples/docker-run.md) | Raw `docker run` invocations for any CI system. |
+This repo is **how to run it**: copy-paste command examples and ready-made
+integrations for GitHub Actions, GitLab CI and Jenkins.
 
 ---
 
-## 1. One-time setup (a team admin, in ScanSuite)
+## What you need
 
-1. Create the product the pipeline reports into, and note its **ID** (or use its exact name).
-2. **Teams → your team → People → Service accounts:** create an account (e.g. `ci`) with the **operator** role.
-3. Issue a **token** with the permissions below (maximum 90 days).
-4. Store it in the CI system as a **masked/secret** variable `SCANSUITE_TOKEN`. Set
-   `SCANSUITE_URL` and `SCANSUITE_TEAM` (the team slug) as plain variables.
+1. **Docker** on the runner.
+2. Your **server URL** and **team slug** → `SCANSUITE_URL`, `SCANSUITE_TEAM`.
+3. An **API token**. In ScanSuite: *Teams → your team → People → Service accounts* →
+   create an `operator` account and issue a token. Store it as the **masked** CI
+   secret `SCANSUITE_TOKEN`. (The client checks the token up front and, if a
+   permission is missing, names it and exits 3 — so you never have to guess.)
+4. The **product** to report into → `--product-name` (or `--product-id`).
 
-**Token permissions (least privilege):**
-
-| Permission | Needed |
-|---|---|
-| `product.read` | Always: finds the product. |
-| `scan.execute` | Always: starts the scan. |
-| `scan.read` | Always: follows the job and the scan. |
-| `finding.read` | Always: reads the findings for the gate. |
-| `credential.read` | Only for the secrets gate (`--fail-on-secrets new` or `all`, the default). With `--fail-on-secrets none`, leave it out. |
-| `scan.cancel` | Optional: cancels the scan when the pipeline is cancelled or `--cancel-on-timeout` fires. |
-| `report.read` | Optional: `--report-zip`. |
-
-The client checks the token before it uploads anything: a missing permission is
-**named** and the job exits 3. Give one token to one pipeline, so it can be revoked
-alone. When the token expires within 14 days the job log warns.
+That's it. Set the three variables once and every example below just works.
 
 ---
 
-## 2. Running it
+## Quick start
 
-The image has Git, so `--changed-only` and `git ls-files` work. Mount the checkout,
-pass the three environment variables, and name the product:
+The client reads `SCANSUITE_URL`, `SCANSUITE_TEAM`, `SCANSUITE_TOKEN` from the
+environment, so the token stays a masked secret and never appears on the command
+line. Mount your checkout at `/src` and run there:
 
 ```bash
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
-    appsec4u/scansuite-ci:1 --product-name my-service
+    appsec4u/scansuite-ci:1 --product-name my-service --profile standard
 ```
 
-- `appsec4u/scansuite-ci:<version>`, or **`:1`** for the latest 1.x.
-- The token is read from the `SCANSUITE_TOKEN` environment variable (pass it as a
-  masked CI secret), or from a file with `--token-file` — **never on the command line.**
-- Runners without Docker can fetch a plain-Python client from your own ScanSuite
-  server at `"$SCANSUITE_URL/ci/"` (it requires only Python 3.8+ and the standard
-  library); the container image is the recommended path and the one documented here.
+`--profile standard` is AI static analysis with reachability, dependency checks and
+AI-verified secrets — a good default for a branch. The rest of this page shows how to
+shape that for pull requests, nightly runs, release gates and single-purpose scans.
 
-Every flag has an environment-variable equivalent (`SCANSUITE_*`), so the same
-invocation works whether you pass flags or set variables — see the table in §8.
+> Every example uses these three env vars. Export them once in your shell to try the
+> commands locally:
+> ```bash
+> export SCANSUITE_URL=https://scansuite.example.com SCANSUITE_TEAM=appsec SCANSUITE_TOKEN=****
+> ```
 
 ---
 
-## 3. Scan profiles
+## Practical examples
 
-| Profile | Scanners | Use it for |
+Complete commands, grouped by what you want to scan. Swap `my-service` for your
+product and add report flags (`--junit`, `--sarif`, `--summary-json`) as your CI needs.
+
+### AI static analysis (SAST)
+
+**Pull request — AI SAST on just the changed files, block what's reachable.**
+Fast enough for every PR; only findings the AI confirms an attacker can reach fail the build.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners mlsast --options mlsast_reachability \
+    --changed-only --base origin/main \
+    --min-confidence reachable --fail-on-severity high \
+    --sarif scansuite.sarif
+```
+
+**Default branch — full AI SAST with reachability, architecture review and git history.**
+The whole repo, the model reasoning about auth/trust boundaries and recent commits.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners mlsast \
+    --options mlsast_reachability,mlsast_security_architecture,mlsast_git_history \
+    --fail-on-severity high --summary-json scansuite.json
+```
+
+**Deep nightly — add the cross-file hunt for auth/authz/tenant-isolation bugs.**
+Slower and higher AI cost; run it on a schedule, not on every push.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners mlsast,sast_full \
+    --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt \
+    --max high=0,critical=0,medium=10 --timeout 14400
+```
+
+**Block a class of bug regardless of severity.**
+Fail on injection anywhere it appears, even Low.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners mlsast --options mlsast_reachability \
+    --fail-on-severity none --block-class sql_injection,command_injection,path_traversal
+```
+
+### Dependency checks (SCA) with AI
+
+**AI-enriched dependencies, reachable-only gate.**
+Scans manifests for known-vulnerable libraries; the AI adds context and traces whether
+the vulnerable code is actually reachable, so unreachable CVEs don't block the build.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners dep_checks --options dep_checks_ai,dep_checks_reachability \
+    --min-confidence reachable --fail-on-severity high --summary-json scansuite.json
+```
+
+**Dependencies only, strict — any High/Critical CVE fails.**
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners dep_checks --options dep_checks_ai --fail-on-severity high
+```
+
+### Secret scanning with AI
+
+**Block only on real, newly introduced secrets.**
+The AI verifies candidates (drops test fixtures and false positives) and the gate fails
+only on secrets this run adds to the product — so an existing backlog doesn't block PRs.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scanners secrets --options secrets_ai \
+    --fail-on-severity none --fail-on-secrets new
+```
+> The secrets gate needs the `credential.read` permission on the token. If your token
+> doesn't have it, add `--fail-on-secrets none` (and drop `secrets`).
+
+### Everything together, with AI
+
+**Release gate — AI SAST + AI dependencies + AI secrets, reachable-only, keep the report.**
+Blocks on reachable findings from Medium up, on injection at any severity, and on every
+open secret; downloads the full report to attach to the release.
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service --profile deep \
+    --min-confidence reachable --fail-on-severity medium \
+    --block-class sql_injection,command_injection --fail-on-secrets all \
+    --report-zip scansuite-report.zip --summary-json scansuite.json
+```
+
+### Fast, no AI
+
+**Rule-based PR check — SAST + secrets + dependencies, no model cost, seconds to run.**
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --profile quick --changed-only --base origin/main --junit scansuite-junit.xml
+```
+
+### Rolling ScanSuite out — report first, block later
+
+Nothing fails yet; findings still show up as test results and in code scanning.
+Tighten with a budget once the team has cleaned up.
+
+```bash
+# phase 1 — visibility only
+docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service --profile standard \
+    --fail-on-severity none --fail-on-secrets none --sarif scansuite.sarif
+
+# phase 2 — allow today's count, and never let a ScanSuite outage block a release
+    ... --max high=8,critical=0 --soft-fail
+```
+
+---
+
+## Choosing scanners and AI features
+
+Use a **profile** for the common cases, or name scanners and options for fine control.
+
+| Profile | What runs | Good for |
 |---|---|---|
-| `quick` | Rule-based SAST, secrets, dependency checks; no AI | Every merge request: minutes. |
-| `standard` (default) | AI SAST with reachability, dependencies and secrets with AI verification | The default branch. |
-| `deep` | AI SAST (reachability, architecture review, boundary hunt), full SAST, IaC, dependencies with reachability, secrets | Nightly and release branches: slow, higher AI cost. |
+| `quick` | Rule-based SAST, secrets, dependencies — **no AI** | Every PR, in minutes |
+| `standard` (default) | **AI SAST** + reachability, dependencies + AI, secrets + AI | The default branch |
+| `deep` | AI SAST + reachability + architecture + cross-file hunt, full SAST, IaC, dependencies + reachability, secrets | Nightly / release |
 
-`--profile quick` (env `SCANSUITE_PROFILE`). `--scanners` and `--options` replace a
-profile's lists, `--add-scanners sast_quick,iacs_kics` adds to them, and
-`--no-ai-verification` drops the AI options.
+Compose your own instead:
 
----
-
-## 4. Scanning only what a merge request changes
-
-`--changed-only` (env `SCANSUITE_CHANGED_ONLY=1`) scans the files changed since the
-merge base with the target branch, so a merge request is checked in minutes on a
-large repository.
-
-- The base is `--base BRANCH_OR_COMMIT` (env `SCANSUITE_BASE`), or else the target
-  branch the CI system reports (GitLab merge requests, GitHub pull requests, Jenkins
-  multibranch change requests, Azure DevOps and Bitbucket pull requests). When a
-  shallow clone lacks the target branch, the client fetches it — so **check out full
-  history** (`fetch-depth: 0`, `GIT_DEPTH`, `clone: depth: full`).
-- Only scanners that can be limited to files run: `mlsast`, `sast_quick`, `sast_full`,
-  `sast_custom`, `iacs_kics`. Secrets and dependency checks need the whole tree; the
-  client says which it dropped. Keep a full scan (e.g. `--profile deep` nightly) for those.
-- Nothing changed (or only excluded files): nothing is scanned and the job passes.
-- No base found (a branch pipeline, not a merge request): a full scan runs, with a warning.
-- It cannot be combined with `--mode` or `--scope`.
+- `--scanners LIST` — the engines to run: `mlsast` (AI SAST), `sast_quick`, `sast_full`,
+  `dep_checks`, `secrets`, `iacs_kics` (IaC).
+- `--options LIST` — the AI features to turn on:
+  `mlsast_reachability`, `mlsast_security_architecture`, `mlsast_git_history`,
+  `mlsast_boundary_hunt`, `dep_checks_ai`, `dep_checks_reachability`, `secrets_ai`.
+- `--add-scanners LIST` — add to a profile instead of replacing it.
+- `--no-ai-verification` — keep the scanners but drop all the AI options (e.g. to save cost).
 
 ---
 
-## 5. Source
+## Scan scope
 
-`--source auto` (the default) uploads an archive, unless `--git-url` or `--mode incremental`
-is given, which makes the server clone the repository.
-
-- **`--source zip`**: archive the checkout on the runner and upload it. In a Git
-  checkout only tracked files are included (`git ls-files`), so build output stays out;
-  add `--exclude GLOB` for more. Use this for private repositories — nothing leaves the
-  runner except the archive. The upload names the repository, branch and commit it was
-  cut from, so each finding links to its file and line.
-- **`--source git --git-url URL [--branch B]`**: the server clones the repository. URL
-  and branch default to what the CI system reports. HTTPS URLs must not contain
-  credentials (client and server refuse them). Private repositories use SSH with the
-  team's repository credential. The server scans the branch head at clone time.
-- **`--mode incremental`** (Git only) scans the changes since the last compatible scan;
-  exits 0 if nothing changed. **`--mode custom-scope --scope PATTERN`** scans selected files.
+- **`--changed-only`** scans only the files changed since the target branch — check out
+  full history (`fetch-depth: 0`, `GIT_DEPTH`) and give `--base BRANCH` when the CI
+  system can't report it. In a PR pipeline the base is detected automatically. Only
+  file-limitable engines run this way (`mlsast`, `sast_*`, `iacs_kics`); keep a full
+  scan on a schedule for dependencies and secrets.
+- **`--source zip`** (default when uploading) sends only tracked files (`git ls-files`);
+  **`--source git --git-url URL`** has the server clone it (SSH for private repos — HTTPS
+  URLs must not contain credentials). **`--mode incremental`** scans only what changed
+  since the last scan and passes when nothing did.
+- **`--source-dir PATH`** points a run at one service in a monorepo.
 
 ---
 
-## 6. Quality gate
+## The quality gate
 
 A finding counts when it comes from this scan and is Open or In Progress.
 
-| Option (env) | Effect |
+| Flag | Effect |
 |---|---|
-| `--fail-on-severity high` (`SCANSUITE_FAIL_ON_SEVERITY`) | Blocks on findings at or above the severity (default `high`; `none` turns it off). |
-| `--max high=0,medium=10` (`SCANSUITE_MAX`) | Allowed findings per severity. A severity named here uses its limit instead of the threshold; the job fails when the count exceeds it. |
-| `--block-class sql_injection,command_injection` (`SCANSUITE_BLOCK_CLASS`) | Findings of these vulnerability classes block at any severity. |
-| `--min-confidence reachable` (`SCANSUITE_MIN_CONFIDENCE`) | Only findings AI verification confirmed reachable (or with a known exploit) block. The default `any` also blocks on findings not assessed. |
-| `--include-unreachable` | Also block on findings AI verification marked Unreachable (ignored by default). |
-| `--fail-on-secrets new` (`SCANSUITE_FAIL_ON_SECRETS`) | Blocks on secrets this run added that are verified or never judged. `all` blocks on every such secret of the product; `none` turns the secrets gate off. |
+| `--fail-on-severity high` | Block at or above this severity (default `high`; `none` = off). |
+| `--max high=0,medium=10` | Per-severity budgets — fail when the count exceeds the limit. |
+| `--block-class sql_injection,command_injection` | These classes block at **any** severity. |
+| `--min-confidence reachable` | Only findings the AI confirms reachable block (default `any`). |
+| `--fail-on-secrets new` | Block on new verified secrets (`all` = every open secret, `none` = off). |
+| `--soft-fail` | A scan/timeout/server error passes with a warning; real findings still fail. |
 
-Every blocking item is printed with the rule that blocked it ("Blocks because: High
-severity", "Medium: 12 found, 10 allowed", "blocked class sql_injection"), in the job
-log and in the JUnit report.
+Every blocking item is printed with the exact rule that blocked it, in the log and the
+JUnit report.
 
 ---
 
-## 7. Exit codes
+## Exit codes
 
 | Code | Meaning |
 |---|---|
-| 0 | The gate passed, or there was nothing to scan (incremental or changed-only). |
-| 1 | The gate failed: blocking findings and/or secrets. |
-| 2 | The scan failed, was cancelled, or was refused (team scan limit, missing credential). |
-| 3 | Configuration error: a bad option, an invalid/expired token (HTTP 401), a missing permission (HTTP 403, named), or an untrusted TLS certificate. |
-| 4 | Timed out waiting (`--timeout`, default 7200 s). |
-| 5 | The ScanSuite server was unreachable or returned an error. |
+| **0** | Gate passed, or nothing to scan. |
+| **1** | Gate failed — blocking findings and/or secrets. |
+| **2** | Scan failed, cancelled, or refused (scan limit, missing credential). |
+| **3** | Configuration — bad option, invalid/expired token, missing permission (named), untrusted TLS. |
+| **4** | Timed out (`--timeout`, default 7200 s). |
+| **5** | Server unreachable or errored. |
 
-With `--soft-fail`, codes 2, 4 and 5 become 0 with a warning, so a ScanSuite outage
-does not block releases. Findings (1) and misconfiguration (3) still fail the job.
-
----
-
-## 8. Reports, TLS and options
-
-**Reports**
-- `--junit` — JUnit XML, shown as test failures in GitLab and Jenkins.
-- `--sarif` — SARIF 2.1.0, for GitHub code scanning and Azure DevOps.
-- `--summary-json` — the scan, gate result, findings and secrets. **Secret values are never included.**
-- `--report-zip` — the full report archive.
-
-**TLS.** A self-signed certificate, or one from a CA the runner does not know, gives a
-warning and the run continues without verification. To verify it, give the CA with
-`--ca-bundle` (env `SCANSUITE_CA_BUNDLE`); to stop instead (exit 3), use `--strict-tls`
-(env `SCANSUITE_STRICT_TLS=1`). A CA-signed certificate for another host, or an expired
-one, always stops the run. `--insecure` turns verification off from the start — testing only.
-
-**Full option / environment-variable reference**
-
-| Flag | Env | Notes |
-|---|---|---|
-| `--url` | `SCANSUITE_URL` | ScanSuite server URL. Required. |
-| `--team` | `SCANSUITE_TEAM` | Team slug. Required. |
-| `--token-file` | `SCANSUITE_TOKEN` (env) | Token from a file, or the masked env var. |
-| `--product-name` / `--product-id` | `SCANSUITE_PRODUCT` / `SCANSUITE_PRODUCT_ID` | Product to report into. |
-| `--profile` | `SCANSUITE_PROFILE` | `quick` / `standard` / `deep`. |
-| `--changed-only`, `--base` | `SCANSUITE_CHANGED_ONLY`, `SCANSUITE_BASE` | Scan only changed files. |
-| `--source`, `--source-dir`, `--exclude`, `--git-url`, `--branch`, `--mode`, `--scope` | `SCANSUITE_SOURCE`, `SCANSUITE_GIT_URL`, `SCANSUITE_BRANCH` | Where the code comes from. |
-| `--scanners`, `--add-scanners`, `--options`, `--no-ai-verification`, `--lang` | — | Override the profile's engines. |
-| `--fail-on-severity`, `--max`, `--block-class`, `--min-confidence`, `--include-unreachable`, `--fail-on-secrets`, `--soft-fail` | `SCANSUITE_FAIL_ON_SEVERITY`, `SCANSUITE_MAX`, `SCANSUITE_BLOCK_CLASS`, `SCANSUITE_MIN_CONFIDENCE`, `SCANSUITE_FAIL_ON_SECRETS` | The quality gate. |
-| `--junit`, `--sarif`, `--summary-json`, `--report-zip` | — | Report outputs. |
-| `--ca-bundle`, `--strict-tls`, `--insecure` | `SCANSUITE_CA_BUNDLE`, `SCANSUITE_STRICT_TLS` | TLS. |
-| `--timeout`, `--poll-interval`, `--no-wait`, `--cancel-on-timeout`, `--idempotency-key` | `SCANSUITE_TIMEOUT`, `SCANSUITE_IDEMPOTENCY_KEY` | Waiting and retries. |
-| `--version`, `--no-version-check` | — | Version. |
+`--soft-fail` turns 2/4/5 into 0.
 
 ---
 
-## 9. Platform integrations
+## Reports & TLS
+
+- `--junit` (test results in GitLab/Jenkins), `--sarif` (GitHub code scanning /
+  Azure DevOps), `--summary-json` (findings; **secret values never included**),
+  `--report-zip` (full archive).
+- A self-signed or unknown-CA certificate → the run **warns and continues unverified**.
+  Verify it with `--ca-bundle FILE`, or refuse with `--strict-tls`. `--insecure` skips
+  verification entirely (testing only).
+
+---
+
+## Platform integrations
 
 | Platform | Start here |
 |---|---|
 | **GitHub Actions** | [`github/action.yml`](github/action.yml) + [`github/EXAMPLES.md`](github/EXAMPLES.md) |
 | **GitLab CI** | [`gitlab/scansuite.gitlab-ci.yml`](gitlab/scansuite.gitlab-ci.yml) + [`gitlab/EXAMPLES.md`](gitlab/EXAMPLES.md) |
 | **Jenkins** | [`jenkins/vars/scansuiteScan.groovy`](jenkins/vars/scansuiteScan.groovy) + [`jenkins/EXAMPLES.md`](jenkins/EXAMPLES.md) |
-| **Any other system** (Azure DevOps, Bitbucket, CircleCI, TeamCity, Drone, Tekton, cron) | [`examples/docker-run.md`](examples/docker-run.md) |
+| **Anything else** (Azure, Bitbucket, CircleCI, cron…) | [`examples/docker-run.md`](examples/docker-run.md) |
 
-The client recognises GitLab, GitHub, Jenkins, Azure DevOps and Bitbucket from their
-environment variables. Anywhere else, give it what it cannot guess: the `--base` for
-`--changed-only`, and a per-run `--idempotency-key` so a retried step never starts a
-second scan.
+Each integration passes the same flags shown above through `SCANSUITE_*` variables, so
+anything you can do on the command line you can do in a pipeline.
