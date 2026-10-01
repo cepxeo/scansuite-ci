@@ -2,6 +2,9 @@
 
 Run a ScanSuite scan from your pipeline, wait for it, and **fail the build when it
 finds real problems** — vulnerabilities, vulnerable dependencies, or leaked secrets.
+It runs every scan type: static analysis of your code (the default), dynamic scans of
+a running web application (`--scan-type dast`) and infrastructure scans of hosts,
+networks and container images (`--scan-type infra`).
 Everything ships in one container image, `appsec4u/scansuite-ci`, with Python and Git
 already inside, so a CI job only needs Docker.
 
@@ -18,7 +21,9 @@ integrations for GitHub Actions, GitLab CI and Jenkins.
    create an `operator` account and issue a token. Store it as the **masked** CI
    secret `SCANSUITE_TOKEN`. (The client checks the token up front and, if a
    permission is missing, names it and exits 3 — so you never have to guess.)
-4. The **product** to report into → `--product-name` (or `--product-id`).
+4. The **product** to report into → `--product-name` (or `--product-id`). Add
+   `--create-product` to have the first run create it (the token then needs
+   *Create and edit products*).
 
 That's it. Set the three variables once and every example below just works.
 
@@ -191,6 +196,42 @@ docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCA
 # phase 2 — allow today's count, and never let a ScanSuite outage block a release
     ... --max high=8,critical=0 --soft-fail
 ```
+
+---
+
+## Web applications and infrastructure
+
+Give the targets with `--target` (repeatable or comma-separated, or
+`SCANSUITE_TARGETS`). Every target must be allowed by your team's target policy in
+ScanSuite (*Teams → Scanning*); one outside it stops the run with exit code 3 before
+anything starts. Findings go through the same quality gate as code scans.
+
+**After deploying to staging — DAST behind a login, fail on High.**
+
+```bash
+docker run --rm -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scan-type dast --target https://staging.example.com --profile standard \
+    --header "Authorization: Bearer $STAGING_TOKEN" --junit scansuite-dast.xml
+```
+
+DAST profiles: `quick` (quick web scan, technology discovery), `standard` (adds
+Nuclei and hidden paths) and `deep` (balanced web scan, Nuclei, discovery, hidden
+paths and AI DAST).
+
+**Release — vulnerability scan of the servers, block only Critical.**
+
+```bash
+docker run --rm -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
+    appsec4u/scansuite-ci:1 --product-name my-service \
+    --scan-type infra --scanners openvas,nuclei --target 10.0.4.10,10.0.4.11 \
+    --no-ping --fail-on-severity critical
+```
+
+Infrastructure scans name their scanners. Discovery (`hosts_scan`), patching checks,
+OSINT and container image scans (`docker_image_scan`, checked against the image's
+registry) run on their own. `--list-scanners` prints what your server offers for each
+scan type; the client checks your selection against it before starting.
 
 ---
 
