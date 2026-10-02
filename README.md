@@ -296,7 +296,7 @@ JUnit report.
 |---|---|
 | **0** | Gate passed, or nothing to scan. |
 | **1** | Gate failed — blocking findings and/or secrets. |
-| **2** | Scan failed, cancelled, or refused (scan limit, missing credential). |
+| **2** | Scan failed, cancelled, or refused (scan limit, missing credential), or one of its scanners did not complete. |
 | **3** | Configuration — bad option, invalid/expired token, missing permission (named), untrusted TLS. |
 | **4** | Timed out (`--timeout`, default 7200 s). |
 | **5** | Server unreachable or errored. |
