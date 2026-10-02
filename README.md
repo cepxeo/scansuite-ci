@@ -313,7 +313,8 @@ JUnit report.
 | **4** | Timed out (`--timeout`, default 7200 s). |
 | **5** | Server unreachable or errored. |
 
-`--soft-fail` turns 2/4/5 into 0.
+`--soft-fail` turns 2/4/5 into 0. A failed run ends with `[scansuite] Exit code N: meaning`;
+GitLab shows every failed job as exit code 1, so that line tells you which failure it was.
 
 ---
 

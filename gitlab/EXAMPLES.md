@@ -356,7 +356,9 @@ scansuite-ai-secrets:
 
 ## Troubleshooting
 
-GitLab shows the client's exit code as `ERROR: Job failed: exit code N`:
+GitLab reports every failed job as `ERROR: Job failed: exit code 1`, whatever code the client
+returned. The client's last line says which failure it was, for example
+`[scansuite] Exit code 3: configuration error: option, token, permission, target or certificate`:
 
 | Exit code | Meaning | What to do |
 |---|---|---|
