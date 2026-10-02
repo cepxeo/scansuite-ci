@@ -15,8 +15,8 @@
 #                         (by default the job warns and continues without verification)
 #
 # Two jobs run by default:
-#   scansuite-merge-request   every merge request: the quick profile on the changed files only
-#   scansuite-default-branch  the default branch: the standard profile (AI SAST) on everything
+#   scansuite-merge-request   every merge request: quick-classic (no AI) on the changed files only
+#   scansuite-default-branch  the default branch: standard-ai (AI SAST) on everything
 # Change a job's SCANSUITE_* variables to tune it, or extend .scansuite for your own jobs.
 # Gate options as variables: SCANSUITE_FAIL_ON_SEVERITY (high), SCANSUITE_MAX (e.g. high=0,medium=10),
 # SCANSUITE_BLOCK_CLASS (e.g. sql_injection), SCANSUITE_MIN_CONFIDENCE (any|reachable).
@@ -44,7 +44,7 @@
 scansuite-merge-request:
   extends: .scansuite
   variables:
-    SCANSUITE_PROFILE: quick
+    SCANSUITE_PROFILE: quick-classic
     SCANSUITE_CHANGED_ONLY: "1"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -52,6 +52,6 @@ scansuite-merge-request:
 scansuite-default-branch:
   extends: .scansuite
   variables:
-    SCANSUITE_PROFILE: standard
+    SCANSUITE_PROFILE: standard-ai
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"

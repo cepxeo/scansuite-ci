@@ -13,7 +13,7 @@
  *         steps {
  *           scansuiteScan(url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
  *                         credentialsId: 'scansuite-ci-token',
- *                         profile: env.CHANGE_ID ? 'quick' : 'standard', changedOnly: env.CHANGE_ID != null)
+ *                         profile: env.CHANGE_ID ? 'quick-classic' : 'standard-ai', changedOnly: env.CHANGE_ID != null)
  *         }
  *       }
  *     }
@@ -29,7 +29,7 @@ def call(Map config = [:]) {
         "SCANSUITE_TEAM=${config.team ?: ''}",
         "SCANSUITE_PRODUCT=${config.product ?: ''}",
         "SCANSUITE_PRODUCT_ID=${config.productId ?: ''}",
-        "SCANSUITE_PROFILE=${config.profile ?: 'standard'}",
+        "SCANSUITE_PROFILE=${config.profile ?: ''}",
         "SCANSUITE_CHANGED_ONLY=${config.changedOnly ? '1' : ''}",
         "SCANSUITE_BASE=${config.base ?: ''}",
         "SCANSUITE_FAIL_ON_SEVERITY=${config.failOnSeverity ?: 'high'}",

@@ -43,7 +43,7 @@ jobs:
           team: appsec
           product: my-service
           token: ${{ secrets.SCANSUITE_TOKEN }}
-          profile: ${{ github.event_name == 'pull_request' && 'quick' || github.event_name == 'schedule' && 'deep' || 'standard' }}
+          profile: ${{ github.event_name == 'pull_request' && 'quick-classic' || github.event_name == 'schedule' && 'full-ai' || 'standard-ai' }}
           changed-only: ${{ github.event_name == 'pull_request' }}
           block-class: sql_injection,command_injection
       - uses: github/codeql-action/upload-sarif@v3
@@ -68,7 +68,7 @@ jobs:
           team: appsec
           product: my-service
           token: ${{ secrets.SCANSUITE_TOKEN }}
-          profile: quick
+          profile: quick-classic
           changed-only: "true"
           fail-on-severity: high
       - uses: github/codeql-action/upload-sarif@v3
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: >
-          scansuite-ci --profile standard
+          scansuite-ci --profile standard-ai
           --fail-on-severity medium --min-confidence reachable
           --block-class sql_injection,command_injection --fail-on-secrets all
           --report-zip scansuite-report.zip --summary-json scansuite.json
@@ -124,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - run: scansuite-ci --profile deep --max high=0,critical=0,medium=10 --timeout 14400 --junit scansuite-junit.xml
+      - run: scansuite-ci --profile full-ai --max high=0,critical=0,medium=10 --timeout 14400 --junit scansuite-junit.xml
 ```
 
 ## 5. Monorepo — one job per service (matrix)
@@ -147,7 +147,7 @@ jobs:
           team: appsec
           product: ${{ matrix.service }}
           token: ${{ secrets.SCANSUITE_TOKEN }}
-          profile: quick
+          profile: quick-classic
           changed-only: "true"
         env:
           SCANSUITE_EXTRA_ARGS: --source-dir services/${{ matrix.service }}
@@ -267,7 +267,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: >
-          scansuite-ci --scanners dep_checks --options dep_checks_ai,dep_checks_reachability
+          scansuite-ci --scanners dep_checks --options dep_checks_reachability
           --min-confidence reachable --fail-on-severity high --summary-json scansuite.json
 ```
 
@@ -317,7 +317,7 @@ jobs:
         with: { fetch-depth: 0 }
       - run: >
           scansuite-ci --scanners mlsast,dep_checks,secrets
-          --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai
+          --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_reachability,secrets_ai
           --max high=0,critical=0,medium=10 --fail-on-secrets all --timeout 14400
           --report-zip scansuite-report.zip
       - uses: actions/upload-artifact@v4

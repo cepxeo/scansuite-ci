@@ -31,7 +31,7 @@ docker run --rm -v "$PWD:/src" -w /src \
   -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
   "$IMAGE" \
   --scanners mlsast,dep_checks,secrets \
-  --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai \
+  --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_reachability,secrets_ai \
   --max high=0,critical=0,medium=10 \
   --fail-on-secrets all \
   --timeout 14400 \

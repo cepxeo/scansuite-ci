@@ -10,7 +10,7 @@
 #       team: appsec
 #       product: my-service
 #       token: ${{ secrets.SCANSUITE_TOKEN }}
-#       profile: ${{ github.event_name == 'pull_request' && 'quick' || 'standard' }}
+#       profile: ${{ github.event_name == 'pull_request' && 'quick-classic' || 'standard-ai' }}
 #       changed-only: ${{ github.event_name == 'pull_request' }}
 #   - uses: github/codeql-action/upload-sarif@v3
 #     if: always()
@@ -34,8 +34,8 @@ inputs:
     description: The product's ID
     default: ""
   profile:
-    description: quick, standard or deep
-    default: standard
+    description: quick-classic, standard-classic, full-classic, quick-ai, standard-ai or full-ai; for DAST quick, standard or deep (default: standard-ai, or standard for DAST)
+    default: ""
   changed-only:
     description: "true: scan only the files the pull request changes"
     default: "false"

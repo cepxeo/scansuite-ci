@@ -38,11 +38,11 @@ it). Mount your checkout at `/src` and run there:
 ```bash
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
-    appsec4u/scansuite-ci:1 --product-name my-service --profile standard
+    appsec4u/scansuite-ci:1 --product-name my-service --profile standard-ai
 ```
 
-`--profile standard` is AI static analysis with reachability, dependency checks and
-AI-verified secrets — a good default for a branch. The rest of this page shows how to
+`--profile standard-ai` (the default) is AI static analysis with reachability, dependency
+checks with AI reachability and AI-verified secrets — a good default for a branch. The rest of this page shows how to
 shape that for pull requests, nightly runs, release gates and single-purpose scans.
 
 > Every example uses these three env vars. Export them once in your shell to try the
@@ -124,14 +124,14 @@ docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCA
 
 ### Dependency checks (SCA) with AI
 
-**AI-enriched dependencies, reachable-only gate.**
-Scans manifests for known-vulnerable libraries; the AI adds context and traces whether
-the vulnerable code is actually reachable, so unreachable CVEs don't block the build.
+**Reachable-only dependency gate.**
+Scans manifests for known-vulnerable libraries; the AI traces whether the vulnerable code
+is actually reachable, so unreachable CVEs don't block the build.
 
 ```bash
 docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
     appsec4u/scansuite-ci:1 --product-name my-service \
-    --scanners dep_checks --options dep_checks_ai,dep_checks_reachability \
+    --scanners dep_checks --options dep_checks_reachability \
     --min-confidence reachable --fail-on-severity high --summary-json scansuite.json
 ```
 
@@ -140,7 +140,7 @@ docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCA
 ```bash
 docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
     appsec4u/scansuite-ci:1 --product-name my-service \
-    --scanners dep_checks --options dep_checks_ai --fail-on-severity high
+    --scanners dep_checks --fail-on-severity high
 ```
 
 ### Secret scanning with AI
@@ -166,7 +166,7 @@ open secret; downloads the full report to attach to the release.
 
 ```bash
 docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
-    appsec4u/scansuite-ci:1 --product-name my-service --profile deep \
+    appsec4u/scansuite-ci:1 --product-name my-service --profile full-ai \
     --min-confidence reachable --fail-on-severity medium \
     --block-class sql_injection,command_injection --fail-on-secrets all \
     --report-zip scansuite-report.zip --summary-json scansuite.json
@@ -179,7 +179,7 @@ docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCA
 ```bash
 docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
     appsec4u/scansuite-ci:1 --product-name my-service \
-    --profile quick --changed-only --base origin/main --junit scansuite-junit.xml
+    --profile quick-classic --changed-only --base origin/main --junit scansuite-junit.xml
 ```
 
 ### Rolling ScanSuite out — report first, block later
@@ -190,7 +190,7 @@ Tighten with a budget once the team has cleaned up.
 ```bash
 # phase 1 — visibility only
 docker run --rm -v "$PWD:/src" -w /src -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
-    appsec4u/scansuite-ci:1 --product-name my-service --profile standard \
+    appsec4u/scansuite-ci:1 --product-name my-service --profile standard-ai \
     --fail-on-severity none --fail-on-secrets none --sarif scansuite.sarif
 
 # phase 2 — allow today's count, and never let a ScanSuite outage block a release
@@ -237,13 +237,22 @@ scan type; the client checks your selection against it before starting.
 
 ## Choosing scanners and AI features
 
-Use a **profile** for the common cases, or name scanners and options for fine control.
+Use a **bundle** for the common cases, or name scanners and options for fine control.
 
-| Profile | What runs | Good for |
+| Bundle (`--profile`) | What runs | Good for |
 |---|---|---|
-| `quick` | Rule-based SAST, secrets, dependencies — **no AI** | Every PR, in minutes |
-| `standard` (default) | **AI SAST** + reachability, dependencies + AI, secrets + AI | The default branch |
-| `deep` | AI SAST + reachability + architecture + cross-file hunt, full SAST, IaC, dependencies + reachability, secrets | Nightly / release |
+| `quick-classic` | Rule-based Semgrep, secrets — **no AI** | Every PR, in minutes |
+| `standard-classic` | Semgrep with the full local ruleset, secrets, dependencies — **no AI** | The default branch without AI |
+| `full-classic` | Every classic scanner: Semgrep (full, quick, team rules), CodeQL and native language engines, IaC, secrets, dependencies — **no AI** | Nightly / release without AI |
+| `quick-ai` | **AI SAST** (no reachability, no Git history), secrets + AI verification | Every PR, with AI |
+| `standard-ai` (default) | **AI SAST** + reachability, secrets + AI verification, dependencies + AI reachability | The default branch |
+| `full-ai` | AI SAST with every AI feature (reachability, architecture, cross-file hunt, Git history), secrets + AI verification, dependencies + AI reachability | Nightly / release |
+
+The AI bundles report only secrets that AI verification confirmed; when verification could
+not run for some, the client warns with their number. `full-ai` analyses Git history, so
+fetch the full history (`fetch-depth: 0`, `GIT_DEPTH: 0`). The 1.x names still work, with a
+warning: `quick` = `quick-classic`, `standard` = `standard-ai`, `deep` = `full-ai`.
+`--list-scanners` prints the bundles and everything your server offers.
 
 Compose your own instead:
 
@@ -251,8 +260,9 @@ Compose your own instead:
   `dep_checks`, `secrets`, `iacs_kics` (IaC).
 - `--options LIST` — the AI features to turn on:
   `mlsast_reachability`, `mlsast_security_architecture`, `mlsast_git_history`,
-  `mlsast_boundary_hunt`, `dep_checks_ai`, `dep_checks_reachability`, `secrets_ai`.
-- `--add-scanners LIST` — add to a profile instead of replacing it.
+  `mlsast_boundary_hunt`, `dep_checks_reachability`, `secrets_ai`.
+- `--add-scanners LIST` — add to a bundle instead of replacing it (e.g. `snyk`, which needs a
+  Snyk token on the server).
 - `--no-ai-verification` — keep the scanners but drop all the AI options (e.g. to save cost).
 
 ---

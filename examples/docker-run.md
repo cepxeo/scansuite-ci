@@ -45,7 +45,7 @@ Rule-based SAST on the changed files, in minutes; blocks on High and Critical.
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile quick --changed-only --base origin/main \
+    --profile quick-classic --changed-only --base origin/main \
     --junit scansuite-junit.xml --sarif scansuite.sarif
 ```
 
@@ -56,7 +56,7 @@ The whole repository, dependencies and secrets verified by AI.
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile standard --summary-json scansuite.json
+    --profile standard-ai --summary-json scansuite.json
 ```
 
 ### 3. Nightly — everything, with a per-severity budget
@@ -66,7 +66,7 @@ No High or Critical at all, at most 10 Medium, whatever the class.
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile deep --fail-on-severity high --max high=0,critical=0,medium=10 --timeout 14400
+    --profile full-ai --fail-on-severity high --max high=0,critical=0,medium=10 --timeout 14400
 ```
 
 ### 4. Release gate — zero tolerance for what attackers can reach
@@ -77,7 +77,7 @@ severity, and on every open secret of the product; keeps the full report.
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile standard --fail-on-severity medium --min-confidence reachable \
+    --profile standard-ai --fail-on-severity medium --min-confidence reachable \
     --block-class sql_injection,command_injection --fail-on-secrets all \
     --report-zip scansuite-report.zip
 ```
@@ -99,7 +99,7 @@ Only findings AI verification confirmed reachable (or with a known exploit) bloc
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile standard --min-confidence reachable --fail-on-severity medium
+    --profile standard-ai --min-confidence reachable --fail-on-severity medium
 ```
 
 ### 7. Introduce ScanSuite — report first, block later
@@ -124,7 +124,7 @@ Point each run at its directory; `--changed-only` then sees only that directory.
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN \
     appsec4u/scansuite-ci:1 \
-    --source-dir services/payments --product-name payments --profile quick --changed-only
+    --source-dir services/payments --product-name payments --profile quick-classic --changed-only
 ```
 
 ### 9. Custom scope — scan selected paths only
@@ -161,19 +161,19 @@ Verify the certificate with your CA (mount it in), or refuse to continue.
 # verify with a corporate CA:
 docker run --rm -v "$PWD:/src" -w /src -v /etc/ssl/corp:/ca:ro \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
-    appsec4u/scansuite-ci:1 --ca-bundle /ca/root.pem --profile quick
+    appsec4u/scansuite-ci:1 --ca-bundle /ca/root.pem --profile quick-classic
 
 # or stop on any untrusted certificate instead of warning:
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
-    appsec4u/scansuite-ci:1 --strict-tls --profile quick
+    appsec4u/scansuite-ci:1 --strict-tls --profile quick-classic
 ```
 
 ### 13. Token from a file instead of the environment
 ```bash
 docker run --rm -v "$PWD:/src" -w /src -v "$HOME/.config/scansuite:/cfg:ro" \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_PRODUCT \
-    appsec4u/scansuite-ci:1 --token-file /cfg/token --profile quick --changed-only --base origin/main
+    appsec4u/scansuite-ci:1 --token-file /cfg/token --profile quick-classic --changed-only --base origin/main
 ```
 
 ### 14. Start and move on — don't wait or gate
@@ -182,7 +182,7 @@ After a merge, start the scan and let ScanSuite collect the results.
 ```bash
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
-    appsec4u/scansuite-ci:1 --profile deep --no-wait
+    appsec4u/scansuite-ci:1 --profile full-ai --no-wait
 ```
 
 ### 15. Unknown CI system — supply what it can't guess
@@ -193,7 +193,7 @@ starts a second scan).
 docker run --rm -v "$PWD:/src" -w /src \
     -e SCANSUITE_URL -e SCANSUITE_TEAM -e SCANSUITE_TOKEN -e SCANSUITE_PRODUCT \
     appsec4u/scansuite-ci:1 \
-    --profile quick --changed-only --base origin/main \
+    --profile quick-classic --changed-only --base origin/main \
     --idempotency-key "build-$BUILD_NUMBER" \
     --junit scansuite-junit.xml --sarif scansuite.sarif
 ```

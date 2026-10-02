@@ -38,7 +38,7 @@ scansuite-merge-request:
 scansuite-nightly:
   extends: .scansuite
   variables:
-    SCANSUITE_PROFILE: deep
+    SCANSUITE_PROFILE: full-ai
     SCANSUITE_MAX: high=0,critical=0,medium=10
     SCANSUITE_EXTRA_ARGS: --timeout 14400
   rules:
@@ -49,7 +49,7 @@ scansuite-release:
   extends: .scansuite
   stage: release
   variables:
-    SCANSUITE_PROFILE: standard
+    SCANSUITE_PROFILE: standard-ai
     SCANSUITE_FAIL_ON_SEVERITY: medium
     SCANSUITE_MIN_CONFIDENCE: reachable
     SCANSUITE_FAIL_ON_SECRETS: all
@@ -67,7 +67,7 @@ scansuite-services:
       - SERVICE: [payments, web]
   variables:
     SCANSUITE_PRODUCT: $SERVICE
-    SCANSUITE_PROFILE: quick
+    SCANSUITE_PROFILE: quick-classic
     SCANSUITE_CHANGED_ONLY: "1"
     SCANSUITE_EXTRA_ARGS: --source-dir services/$SERVICE
   rules:
@@ -87,7 +87,7 @@ scansuite:
   variables:
     GIT_DEPTH: "50"        # --changed-only needs the target branch
   script:
-    - scansuite-ci --profile quick --changed-only
+    - scansuite-ci --profile quick-classic --changed-only
         --block-class sql_injection --fail-on-severity high
         --junit scansuite-junit.xml --sarif scansuite.sarif
   artifacts:
@@ -116,7 +116,7 @@ scansuite-incremental:
   stage: test
   image: { name: appsec4u/scansuite-ci:1, entrypoint: [""] }
   script:
-    - scansuite-ci --source git --mode incremental --profile standard --summary-json scansuite.json
+    - scansuite-ci --source git --mode incremental --profile standard-ai --summary-json scansuite.json
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 ```
@@ -179,7 +179,7 @@ scansuite-ai-deps:
   variables:
     SCANSUITE_MIN_CONFIDENCE: reachable
     SCANSUITE_FAIL_ON_SEVERITY: high
-    SCANSUITE_EXTRA_ARGS: --scanners dep_checks --options dep_checks_ai,dep_checks_reachability
+    SCANSUITE_EXTRA_ARGS: --scanners dep_checks --options dep_checks_reachability
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 ```
@@ -207,7 +207,7 @@ scansuite-ai-deep:
     SCANSUITE_FAIL_ON_SECRETS: all
     SCANSUITE_EXTRA_ARGS: >-
       --scanners mlsast,dep_checks,secrets
-      --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai
+      --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_reachability,secrets_ai
       --timeout 14400 --report-zip scansuite-report.zip
   artifacts:
     paths: [scansuite-report.zip, scansuite.json]

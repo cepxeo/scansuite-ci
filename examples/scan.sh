@@ -19,13 +19,14 @@
 #
 #   Optional:
 #     SCANSUITE_IMAGE     image to run       (default: appsec4u/scansuite-ci:1)
-#     SCANSUITE_PROFILE   quick|standard|deep (default: standard)
+#     SCANSUITE_PROFILE   quick-classic|standard-classic|full-classic|quick-ai|standard-ai|full-ai
+#                         (default: standard-ai)
 #
 #   Examples:
 #     ./scan.sh
 #     ./scan.sh --changed-only --base origin/main
-#     SCANSUITE_PROFILE=quick ./scan.sh --changed-only
-#     SCANSUITE_PROFILE=deep  ./scan.sh --report-zip scansuite-report.zip
+#     SCANSUITE_PROFILE=quick-classic ./scan.sh --changed-only
+#     SCANSUITE_PROFILE=full-ai       ./scan.sh --report-zip scansuite-report.zip
 #     ./scan.sh --scanners mlsast --options mlsast_reachability --min-confidence reachable
 #
 # Exit code is the client's: 0 pass · 1 gate failed · 2 scan failed · 3 config

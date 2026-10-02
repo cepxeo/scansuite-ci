@@ -28,7 +28,7 @@ pipeline {
         scansuiteScan(
           url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
           credentialsId: 'scansuite-ci-token',
-          profile: env.CHANGE_ID ? 'quick' : (currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause') ? 'deep' : 'standard'),
+          profile: env.CHANGE_ID ? 'quick-classic' : (currentBuild.getBuildCauses('hudson.triggers.TimerTrigger$TimerTriggerCause') ? 'full-ai' : 'standard-ai'),
           changedOnly: env.CHANGE_ID != null,
           blockClass: 'sql_injection,command_injection')
       }
@@ -49,7 +49,7 @@ pipeline {
         scansuiteScan(
           url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
           credentialsId: 'scansuite-ci-token',
-          profile: 'standard',
+          profile: 'standard-ai',
           failOnSeverity: 'medium',
           minConfidence: 'reachable',
           args: '--fail-on-secrets all --report-zip scansuite-report.zip')
@@ -72,7 +72,7 @@ pipeline {
         scansuiteScan(
           url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
           credentialsId: 'scansuite-ci-token',
-          profile: 'standard',
+          profile: 'standard-ai',
           unstableOnGate: true)      // a failed gate → UNSTABLE, not FAILURE
       }
     }
@@ -93,7 +93,7 @@ pipeline {
         scansuiteScan(
           url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
           credentialsId: 'scansuite-ci-token',
-          profile: 'deep',
+          profile: 'full-ai',
           max: 'high=0,critical=0,medium=10',
           args: '--timeout 14400')
       }
@@ -118,7 +118,7 @@ pipeline {
   stages {
     stage('ScanSuite') {
       steps {
-        sh '''scansuite-ci --profile quick --changed-only \
+        sh '''scansuite-ci --profile quick-classic --changed-only \
                 --block-class sql_injection --fail-on-severity high \
                 --junit scansuite-junit.xml --sarif scansuite.sarif'''
       }
@@ -147,7 +147,7 @@ pipeline {
             scansuiteScan(
               url: 'https://scansuite.example.com', team: 'appsec', product: svc,
               credentialsId: 'scansuite-ci-token',
-              profile: 'quick', changedOnly: env.CHANGE_ID != null,
+              profile: 'quick-classic', changedOnly: env.CHANGE_ID != null,
               args: "--source-dir services/${svc}",
               unstableOnGate: true)
           }
@@ -220,7 +220,7 @@ pipeline {
           url: 'https://scansuite.example.com', team: 'appsec', product: 'my-service',
           credentialsId: 'scansuite-ci-token',
           minConfidence: 'reachable', failOnSeverity: 'high',
-          args: '--scanners dep_checks --options dep_checks_ai,dep_checks_reachability')
+          args: '--scanners dep_checks --options dep_checks_reachability')
       }
     }
   }
@@ -264,7 +264,7 @@ pipeline {
           credentialsId: 'scansuite-ci-token',
           max: 'high=0,critical=0,medium=10',
           args: '''--scanners mlsast,dep_checks,secrets \
-                   --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_ai,dep_checks_reachability,secrets_ai \
+                   --options mlsast_reachability,mlsast_security_architecture,mlsast_boundary_hunt,dep_checks_reachability,secrets_ai \
                    --fail-on-secrets all --timeout 14400 --report-zip scansuite-report.zip''')
       }
     }
