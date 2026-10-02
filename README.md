@@ -252,7 +252,9 @@ The AI bundles report only secrets that AI verification confirmed; when verifica
 not run for some, the client warns with their number. `full-ai` analyses Git history, so
 fetch the full history (`fetch-depth: 0`, `GIT_DEPTH: 0`). The 1.x names still work, with a
 warning: `quick` = `quick-classic`, `standard` = `standard-ai`, `deep` = `full-ai`.
-`--list-scanners` prints the bundles and everything your server offers.
+`--list-scanners` prints the bundles and everything your server offers, marking what it
+cannot run for your team (for example OpenVAS without credentials, or AI scanners without an
+AI provider); choosing one of those stops the run with exit code 3 before a scan starts.
 
 Compose your own instead:
 
