@@ -35,6 +35,11 @@ preset. Copy it; it is shown once.
 
 `SCANSUITE_EXTRA_ARGS` passes any other client option to a job.
 
+> **Project variables win over variables in `.gitlab-ci.yml`.** A job's
+> `SCANSUITE_PRODUCT: other` is ignored while the project defines `SCANSUITE_PRODUCT`. To
+> vary something per job, pass the option instead (`SCANSUITE_EXTRA_ARGS: --product-name other`;
+> options win over variables), or leave that variable out of the project's settings.
+
 **3. A runner** with the **Docker executor** that can pull `appsec4u/scansuite-ci:1` and
 reach your ScanSuite server over HTTPS. The template's jobs have no tags, so the runner
 must accept untagged jobs — or add your tags to `.scansuite`:
@@ -138,8 +143,9 @@ Scanning*); a target outside them stops the job with exit code 3 before any scan
 | Default branch | `standard-classic` | `standard-ai` |
 | Nightly or release (schedule, tag) | `full-classic` | `full-ai` |
 
-- **`quick-classic` is rule-based Semgrep only.** It is fast, but in the test above it let a
-  merge request through that added `pickle.loads(request.data)` and `eval(request.args[...])`.
+- **`quick-classic` is rule-based Semgrep only.** It is fast, but in the tests it let merge
+  requests through that added `pickle.loads(request.data)` and `eval(request.args[...])` in
+  Python, and a shell command built from the request in JavaScript (`exec("ping " + req.query.host)`).
   If your team has AI, `quick-ai` is the stronger merge request gate:
 
   ```yaml
@@ -228,21 +234,28 @@ scansuite-services:
     matrix:
       - SERVICE: [payments, web]
   variables:
-    SCANSUITE_PRODUCT: $SERVICE
     SCANSUITE_PROFILE: quick-classic
     SCANSUITE_CHANGED_ONLY: "1"
-    SCANSUITE_EXTRA_ARGS: --source-dir services/$SERVICE
+    # An option, not SCANSUITE_PRODUCT: the project's variable would win over a job variable.
+    SCANSUITE_EXTRA_ARGS: --source-dir services/$SERVICE --product-name $SERVICE --create-product
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 ```
 
 ### Create the product on the first run
 
+The first run creates the product, every later run finds it (the CI pipeline token preset
+allows creating products):
+
 ```yaml
-variables:
-  SCANSUITE_PRODUCT: $CI_PROJECT_NAME
-  SCANSUITE_CREATE_PRODUCT: "1"     # the CI pipeline token preset allows it
+.scansuite:
+  variables:
+    SCANSUITE_EXTRA_ARGS: --product-name $CI_PROJECT_NAME --create-product
 ```
+
+A job that sets its own `SCANSUITE_EXTRA_ARGS` replaces this value, so repeat the two
+options there. Or set `SCANSUITE_PRODUCT` and `SCANSUITE_CREATE_PRODUCT=1` as project
+variables.
 
 ### Report-only rollout
 
@@ -359,6 +372,8 @@ Common configuration errors:
   *Protected* and the pipeline runs on an unprotected branch.
 - **`The API token lacks permission(s): credential.read`** — the token was issued without
   the CI pipeline preset; issue a new one, or set `SCANSUITE_FAIL_ON_SECRETS: none`.
+- **Findings land in the wrong product** — the project's `SCANSUITE_PRODUCT` variable
+  overrides the job's; pass `--product-name` in `SCANSUITE_EXTRA_ARGS` instead.
 - **`Cannot run on this server: openvas: ...`** — that scanner is not set up for your team;
   the message says where to set it up.
 - **`--changed-only: no base to compare with`** — not a merge request pipeline, or the
