@@ -1,0 +1,9 @@
+{
+  "name": "scansuite",
+  "description": "Run ScanSuite security scans and read their results through the scansuite-ci client and the ScanSuite team API.",
+  "version": "1.0.0",
+  "author": {
+    "name": "appsec4u",
+    "url": "https://github.com/cepxeo/scansuite-ci"
+  }
+}

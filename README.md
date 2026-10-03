@@ -340,3 +340,19 @@ GitLab shows every failed job as exit code 1, so that line tells you which failu
 
 Each integration passes the same flags shown above through `SCANSUITE_*` variables, so
 anything you can do on the command line you can do in a pipeline.
+
+## Use it from an AI agent
+
+An AI coding agent (Claude Code, Claude, Copilot) can run scans and read results
+on its own with the bundled **scansuite** skill. This repo is also a Claude Code
+plugin marketplace:
+
+```
+/plugin marketplace add cepxeo/scansuite-ci
+```
+```
+/plugin install scansuite@scansuite-ci
+```
+
+See [`plugins/scansuite/`](plugins/scansuite/) for the skill, loose-file and
+claude.ai install, and setup.

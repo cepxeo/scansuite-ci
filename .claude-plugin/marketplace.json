@@ -1,0 +1,18 @@
+{
+  "name": "scansuite-ci",
+  "owner": {
+    "name": "appsec4u",
+    "url": "https://github.com/cepxeo/scansuite-ci"
+  },
+  "metadata": {
+    "description": "ScanSuite agent skills: run security scans and read results through scansuite-ci.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "scansuite",
+      "source": "./plugins/scansuite",
+      "description": "Run ScanSuite security scans (SAST, DAST, infrastructure, OSINT, image CVEs) and read their results through the scansuite-ci client and the ScanSuite team API."
+    }
+  ]
+}
