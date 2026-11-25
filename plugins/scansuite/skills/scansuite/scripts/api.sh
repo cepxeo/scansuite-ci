@@ -27,6 +27,13 @@ fi
 method="$1" path="$2" body="${3:-}"
 
 args=(-sS --config - -X "$method")
+# A server with a self-signed or private-CA certificate: its CA file, as the CI
+# client takes it (--ca-bundle), or SCANSUITE_INSECURE=1 to skip the check.
+if [ -n "${SCANSUITE_CA_BUNDLE:-}" ]; then
+    args+=(--cacert "$SCANSUITE_CA_BUNDLE")
+elif [ "${SCANSUITE_INSECURE:-}" = "1" ]; then
+    args+=(-k)
+fi
 if [ -n "$body" ]; then
     args+=(-H "Content-Type: application/json" --data "$body")
 fi

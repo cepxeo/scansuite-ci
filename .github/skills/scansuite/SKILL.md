@@ -52,6 +52,10 @@ run for this team and why. Read it before promising a scan: a scanner marked
 NOT AVAILABLE (often Nessus, OpenVAS or Snyk) would be refused with exit code 3,
 so offer what is available instead and say what the user would have to set up.
 
+A server with a self-signed or private-CA certificate: set `SCANSUITE_CA_BUNDLE`
+to its CA file (the client and `api.sh` both read it), or `SCANSUITE_INSECURE=1`
+for `api.sh` and `--insecure` for the client on a test server only.
+
 On Windows run everything in WSL or Git Bash (with `MSYS_NO_PATHCONV=1` for Docker
 paths). With Docker, `ssci.sh` mounts the current directory at `/src`: run it from
 the directory to scan, and output files land there.
